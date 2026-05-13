@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -32,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.nammasantheledger.ui.theme.NammaSantheLedgerTheme
 import kotlinx.coroutines.launch
@@ -59,6 +62,9 @@ class MainActivity : ComponentActivity() {
                 val isLoggedIn by sessionManager.isLoggedIn.collectAsState(initial = false)
                 val isUserLoggedIn by viewModel.isUserLoggedIn.collectAsState()
 
+                val bottomNavRoutes = listOf("main", "history", "profile")
+                val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+
                 NavHost(
                     navController = navController,
                     startDestination = "splash"
@@ -66,18 +72,11 @@ class MainActivity : ComponentActivity() {
 
                     composable("splash") {
                         SplashScreenUI()
-                        
-                        LaunchedEffect(Unit) {
-                            // Wait for checkSession to complete
-                            delay(500)
+                        LaunchedEffect(isUserLoggedIn) {
                             if (isUserLoggedIn == true) {
-                                navController.navigate("main") {
-                                    popUpTo("splash") { inclusive = true }
-                                }
+                                navController.navigate("main") { popUpTo("splash") { inclusive = true } }
                             } else if (isUserLoggedIn == false) {
-                                navController.navigate("login") {
-                                    popUpTo("splash") { inclusive = true }
-                                }
+                                navController.navigate("login") { popUpTo("splash") { inclusive = true } }
                             }
                         }
                     }
@@ -86,16 +85,10 @@ class MainActivity : ComponentActivity() {
                         LoginScreen(
                             viewModel = viewModel,
                             onLoginSuccess = { email, userName ->
-                                lifecycleScope.launch {
-                                    sessionManager.setLoggedIn(email, userName)
-                                }
-                                navController.navigate("main") {
-                                    popUpTo("login") { inclusive = true }
-                                }
+                                lifecycleScope.launch { sessionManager.setLoggedIn(email, userName) }
+                                navController.navigate("main") { popUpTo("login") { inclusive = true } }
                             },
-                            onNavigateToSignup = {
-                                navController.navigate("signup")
-                            }
+                            onNavigateToSignup = { navController.navigate("signup") }
                         )
                     }
 
@@ -103,52 +96,95 @@ class MainActivity : ComponentActivity() {
                         SignupScreen(
                             viewModel = viewModel,
                             onSignupSuccess = { name, email ->
-                                lifecycleScope.launch {
-                                    sessionManager.setLoggedIn(email, name)
-                                }
-                                navController.navigate("main") {
-                                    popUpTo("login") { inclusive = true }
-                                }
+                                lifecycleScope.launch { sessionManager.setLoggedIn(email, name) }
+                                navController.navigate("main") { popUpTo("login") { inclusive = true } }
                             }
                         )
                     }
 
                     composable("main") {
-                        MainScreen(
-                            viewModel,
-                            navController,
-                            onNavigateToHistory = {
-                                navController.navigate("history")
-                            }
-                        )
+                        AppScaffold(currentRoute = "main", onTabSelected = { route ->
+                            navController.navigate(route) { launchSingleTop = true; popUpTo("main") }
+                        }) {
+                            MainScreen(viewModel, navController, onNavigateToHistory = {})
+                        }
                     }
 
                     composable("history") {
-                        HistoryScreen(
-                            viewModel,
-                            onBack = {
-                                navController.popBackStack()
-                            }
-                        )
+                        AppScaffold(currentRoute = "history", onTabSelected = { route ->
+                            navController.navigate(route) { launchSingleTop = true; popUpTo("main") }
+                        }) {
+                            HistoryScreen(viewModel, onBack = { navController.popBackStack() })
+                        }
                     }
 
                     composable("profile") {
                         val userName by sessionManager.loggedInName.collectAsState(initial = "")
                         val userEmail by sessionManager.loggedInEmail.collectAsState(initial = "")
-
-                        ProfileScreen(
-                            onBack = { navController.popBackStack() },
-                            onLogout = {
-                                navController.navigate("login") {
-                                    popUpTo("main") { inclusive = true }
-                                }
-                            },
-                            userName = userName,
-                            userEmail = userEmail
-                        )
+                        AppScaffold(currentRoute = "profile", onTabSelected = { route ->
+                            navController.navigate(route) { launchSingleTop = true; popUpTo("main") }
+                        }) {
+                            ProfileScreen(
+                                onBack = { navController.popBackStack() },
+                                onLogout = {
+                                    navController.navigate("login") { popUpTo("main") { inclusive = true } }
+                                },
+                                userName = userName,
+                                userEmail = userEmail
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+data class BottomNavItem(val route: String, val label: String, val icon: ImageVector)
+
+@Composable
+fun AppScaffold(
+    currentRoute: String,
+    onTabSelected: (String) -> Unit,
+    content: @Composable () -> Unit
+) {
+    val items = listOf(
+        BottomNavItem("main", "Home", Icons.Default.Home),
+        BottomNavItem("history", "History", Icons.AutoMirrored.Filled.List),
+        BottomNavItem("profile", "Profile", Icons.Default.Person)
+    )
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color.White,
+                tonalElevation = 4.dp,
+                modifier = Modifier.height(52.dp)
+            ) {
+                items.forEach { item ->
+                    NavigationBarItem(
+                        selected = currentRoute == item.route,
+                        onClick = { onTabSelected(item.route) },
+                        icon = {
+                            Icon(
+                                item.icon,
+                                contentDescription = item.label,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        },
+                        alwaysShowLabel = false,
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF1A237E),
+                            indicatorColor = Color(0xFFE8EAF6),
+                            unselectedIconColor = Color.Gray
+                        )
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding)) {
+            content()
         }
     }
 }
@@ -162,6 +198,9 @@ fun MainScreen(
 ) {
     var inputAmount by remember { mutableStateOf("") }
     var customerName by remember { mutableStateOf("") }
+
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
 
     val totalUdari by viewModel.totalUdariBalance.collectAsState()
     val totalPaid by viewModel.totalPaidBalance.collectAsState()
@@ -180,25 +219,6 @@ fun MainScreen(
                         color = Color(0xFF1A237E)
                     )
                 },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigate("profile") }) {
-                        Icon(
-                            imageVector = Icons.Default.AccountCircle,
-                            contentDescription = "Profile",
-                            tint = Color(0xFF1A237E),
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onNavigateToHistory) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.List,
-                            contentDescription = "History",
-                            tint = Color(0xFF1A237E)
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = Color.Transparent
                 )
@@ -209,21 +229,24 @@ fun MainScreen(
                 modifier = Modifier.fillMaxWidth(),
                 tonalElevation = 4.dp,
                 shadowElevation = 10.dp,
-                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 30.dp),
                 color = Color.White
             ) {
                 Row(
                     modifier = Modifier.padding(10.dp).navigationBarsPadding(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
                         onClick = {
                             if (inputAmount.isNotEmpty() && customerName.isNotBlank()) {
                                 viewModel.addEntry(customerName.trim(), inputAmount.toDouble(), true)
                                 inputAmount = ""
+                                customerName = ""
+                                focusManager.clearFocus(force = true)
+
                             }
                         },
-                        modifier = Modifier.weight(1f).height(60.dp),
+        modifier = Modifier.weight(1f).height(48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -234,9 +257,11 @@ fun MainScreen(
                             if (inputAmount.isNotEmpty() && customerName.isNotBlank()) {
                                 viewModel.addEntry(customerName.trim(), inputAmount.toDouble(), false)
                                 inputAmount = ""
+                                customerName = ""
+                                focusManager.clearFocus(force = true)
                             }
                         },
-                        modifier = Modifier.weight(1f).height(60.dp),
+                        modifier = Modifier.weight(1f).height(48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF43A047)),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -251,12 +276,12 @@ fun MainScreen(
             PremiumDashboard(totalUdari, totalPaid)
 
             Card(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(4.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     OutlinedTextField(
                         value = customerName,
                         onValueChange = { customerName = it },
@@ -266,7 +291,7 @@ fun MainScreen(
                         leadingIcon = { Icon(Icons.Default.Person, null, tint = Color(0xFF1A237E)) },
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF1A237E))
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -285,16 +310,16 @@ fun MainScreen(
 
             Button(
                 onClick = { sendWhatsAppReminder(context, customerName, activeCustomer?.pendingUdari ?: 0.0) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).height(50.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).height(44.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Default.Send, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+                Icon(Icons.Default.Send, null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text("QUICK REMINDER", fontWeight = FontWeight.Bold)
             }
 
-            Box(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
+            Box(modifier = Modifier.weight(1f).padding(top = 4.dp)) {
                 PremiumKeypad(
                     onNumberClick = { if (inputAmount.length < 8) inputAmount += it },
                     onDelete = { if (inputAmount.isNotEmpty()) inputAmount = inputAmount.dropLast(1) }
@@ -309,13 +334,13 @@ fun PremiumDashboard(totalUdari: Double, totalPaid: Double) {
     val netBalance = totalUdari - totalPaid
     Box(
         modifier = Modifier
-            .padding(16.dp)
+            .padding(horizontal = 18.dp, vertical = 14.dp)
             .fillMaxWidth()
-            .height(160.dp)
-            .clip(RoundedCornerShape(32.dp))
+            .height(170.dp)
+            .clip(RoundedCornerShape(24.dp))
             .background(Brush.linearGradient(listOf(Color(0xFF1A237E), Color(0xFF3949AB))))
     ) {
-        Column(modifier = Modifier.padding(24.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Text("NET OUTSTANDING", color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.labelMedium)
             Text(
                 "₹ ${if (netBalance < 0) -netBalance else netBalance}",
@@ -325,9 +350,9 @@ fun PremiumDashboard(totalUdari: Double, totalPaid: Double) {
             )
             Spacer(modifier = Modifier.weight(1f))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                DashboardStat("Given", "₹$totalUdari", Color.White)
+                DashboardStat("Pending", "₹$totalUdari", Color.White)
                 VerticalDivider(color = Color.White.copy(alpha = 0.2f), modifier = Modifier.height(30.dp))
-                DashboardStat("Collected", "₹$totalPaid", Color.White)
+                DashboardStat("Received", "₹$totalPaid", Color.White)
             }
         }
     }
@@ -379,8 +404,8 @@ fun PremiumKeypad(
                 },
 
                 modifier = Modifier
-                    .padding(8.dp)
-                    .height(50.dp),
+                    .padding(4.dp)
+                    .height(46.dp),
 
                 shape = RoundedCornerShape(20.dp),
 
@@ -418,7 +443,7 @@ fun CustomerBalanceSection(
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         customers.take(5).forEach { customer ->
 

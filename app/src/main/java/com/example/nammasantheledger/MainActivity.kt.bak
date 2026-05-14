@@ -7,11 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -160,31 +156,33 @@ fun AppScaffold(
 
     Scaffold(
         bottomBar = {
-            // Force a specific height to reduce the overall footprint
-            Surface(
-                tonalElevation = 3.dp,
-                color = Color.White
+            NavigationBar(
+                containerColor = Color.White,
+                tonalElevation = 4.dp,
+                modifier = Modifier.height(52.dp)
             ) {
-                NavigationBar(
-                    containerColor = Color.White,
-                    // REMOVED navigationBarsPadding() to kill the bottom gap
-                    // Set a fixed height if the default is still too tall (e.g., 65.dp)
-                    modifier = Modifier.height(105.dp)
-                ) {
-                    items.forEach { item ->
-                        NavigationBarItem(
-                            selected = currentRoute == item.route,
-                            onClick = { onTabSelected(item.route) },
-                            icon = { Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(20.dp)) },
-                            label = { Text(item.label, fontSize = 9.sp) }, // Smaller text
-                            alwaysShowLabel = true
+                items.forEach { item ->
+                    NavigationBarItem(
+                        selected = currentRoute == item.route,
+                        onClick = { onTabSelected(item.route) },
+                        icon = {
+                            Icon(
+                                item.icon,
+                                contentDescription = item.label,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        },
+                        alwaysShowLabel = false,
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF1A237E),
+                            indicatorColor = Color(0xFFE8EAF6),
+                            unselectedIconColor = Color.Gray
                         )
-                    }
+                    )
                 }
             }
         }
     ) { innerPadding ->
-        // Use the innerPadding but you can reduce it manually if needed
         Box(modifier = Modifier.padding(innerPadding)) {
             content()
         }
@@ -199,155 +197,162 @@ fun MainScreen(
     onNavigateToHistory: () -> Unit
 ) {
     var inputAmount by remember { mutableStateOf("") }
-    // Add this near your other 'remember' variables
-    // Start with keypad visible so it displays immediately.
-    var isKeypadVisible by remember { mutableStateOf(true) }
     var customerName by remember { mutableStateOf("") }
+
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
+
     val totalUdari by viewModel.totalUdariBalance.collectAsState()
     val totalPaid by viewModel.totalPaidBalance.collectAsState()
     val customerSummaries by viewModel.customerSummaries.collectAsState(initial = emptyList())
-    val activeCustomer = customerSummaries.find { it.name.equals(customerName.trim(), ignoreCase = true) }
+    val activeCustomer = customerSummaries.find { it.name.equals(customerName, ignoreCase = true) }
     val context = LocalContext.current
 
     Scaffold(
         containerColor = Color(0xFFF8F9FA),
         topBar = {
-            // FIXED: Added statusBarsPadding so title isn't cut off by the notch/clock
             CenterAlignedTopAppBar(
-                title = { Text("Namma Santhe Ledger", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black) },
-                modifier = Modifier
-                    .statusBarsPadding()
-                    .height(50.dp)
+                title = {
+                    Text(
+                        "Namma Santhe Ledger",
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF1A237E)
+                    )
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.Transparent
+                )
             )
+        },
+        bottomBar = {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                tonalElevation = 4.dp,
+                shadowElevation = 10.dp,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 30.dp),
+                color = Color.White
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp).navigationBarsPadding(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            if (inputAmount.isNotEmpty() && customerName.isNotBlank()) {
+                                viewModel.addEntry(customerName.trim(), inputAmount.toDouble(), true)
+                                inputAmount = ""
+                                customerName = ""
+                                focusManager.clearFocus(force = true)
+
+                            }
+                        },
+        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("GIVE UDARI", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                    Button(
+                        onClick = {
+                            if (inputAmount.isNotEmpty() && customerName.isNotBlank()) {
+                                viewModel.addEntry(customerName.trim(), inputAmount.toDouble(), false)
+                                inputAmount = ""
+                                customerName = ""
+                                focusManager.clearFocus(force = true)
+                            }
+                        },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF43A047)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("RECEIVED", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
+            }
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(horizontal = 16.dp), // Increased slightly for better look
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // 1. COMPACT DASHBOARD
-            CompactDashboard(totalUdari, totalPaid)
+        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
 
-            Spacer(modifier = Modifier.height(16.dp)) // Reduced spacer
+            PremiumDashboard(totalUdari, totalPaid)
 
-            // 2. INPUT CARD
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isKeypadVisible = true },
-                shape = RoundedCornerShape(12.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(4.dp)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     OutlinedTextField(
                         value = customerName,
                         onValueChange = { customerName = it },
-                        label = { Text("Name", fontSize = 12.sp) },
-                        modifier = Modifier.fillMaxWidth().height(70.dp), // Reduced height
-                        singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                        label = { Text("Customer Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        leadingIcon = { Icon(Icons.Default.Person, null, tint = Color(0xFF1A237E)) },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF1A237E))
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Amount:", fontSize = 15.sp, color = Color.Gray)
-                        Text("₹$inputAmount", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 3. REDUCED BUTTONS
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        val amount = inputAmount.toDoubleOrNull() ?: return@Button
-                        if (customerName.isBlank()) return@Button
-                        viewModel.addEntry(customerName.trim(), amount, true)
-                        inputAmount = ""
-                        // keep customerName as-is so user can quickly enter multiple amounts
-                        isKeypadVisible = false
-                    },
-                    modifier = Modifier.weight(1f).height(42.dp), // Balanced height
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) { Text("UDARI", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-
-                Button(
-                    onClick = {
-                        val amount = inputAmount.toDoubleOrNull() ?: return@Button
-                        if (customerName.isBlank()) return@Button
-                        viewModel.addEntry(customerName.trim(), amount, false)
-                        inputAmount = ""
-                        customerName = ""
-                        isKeypadVisible = false
-                    },
-                    modifier = Modifier.weight(1f).height(42.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF43A047)),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) { Text("RECEIVED", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-            }
-
-            // 4. THE FLEXIBLE BOTTOM AREA
-            Box(modifier = Modifier.weight(1f)) {
-                Column {
-                    if (isKeypadVisible) {
-                        PremiumKeypad(
-                            onNumberClick = { if (inputAmount.length < 8) inputAmount += it },
-                            onDelete = { if (inputAmount.isNotEmpty()) inputAmount = inputAmount.dropLast(1) }
+                        Text("Amount", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+                        Text(
+                            "₹ $inputAmount",
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (inputAmount.isEmpty()) Color.LightGray else Color.Black
                         )
-                    } else {
-                        if (customerName.isNotBlank() && activeCustomer != null) {
-                            CustomerBalanceSection(listOf(activeCustomer), context)
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
+            }
+
+            Button(
+                onClick = { sendWhatsAppReminder(context, customerName, activeCustomer?.pendingUdari ?: 0.0) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).height(44.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Send, null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("QUICK REMINDER", fontWeight = FontWeight.Bold)
+            }
+
+            Box(modifier = Modifier.weight(1f).padding(top = 4.dp)) {
+                PremiumKeypad(
+                    onNumberClick = { if (inputAmount.length < 8) inputAmount += it },
+                    onDelete = { if (inputAmount.isNotEmpty()) inputAmount = inputAmount.dropLast(1) }
+                )
             }
         }
     }
 }
 
 @Composable
-fun CompactDashboard(totalUdari: Double, totalPaid: Double) {
+fun PremiumDashboard(totalUdari: Double, totalPaid: Double) {
     val netBalance = totalUdari - totalPaid
     Box(
         modifier = Modifier
+            .padding(horizontal = 18.dp, vertical = 14.dp)
             .fillMaxWidth()
-            .height(130.dp) // Cut another 5dp to be safe
-            .clip(RoundedCornerShape(16.dp))
+            .height(170.dp)
+            .clip(RoundedCornerShape(24.dp))
             .background(Brush.linearGradient(listOf(Color(0xFF1A237E), Color(0xFF3949AB))))
-            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Column {
-            Text("NET OUTSTANDING", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text("NET OUTSTANDING", color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.labelMedium)
             Text(
-                "₹${if (netBalance < 0) -netBalance else netBalance}",
+                "₹ ${if (netBalance < 0) -netBalance else netBalance}",
                 color = Color.White,
-                fontSize = 22.sp,
+                style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Black
             )
             Spacer(modifier = Modifier.weight(1f))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text("Pending", color = Color.White.copy(alpha = 0.6f), fontSize = 9.sp)
-                    Text("₹$totalUdari", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Received", color = Color.White.copy(alpha = 0.6f), fontSize = 9.sp)
-                    Text("₹$totalPaid", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+                DashboardStat("Pending", "₹$totalUdari", Color.White)
+                VerticalDivider(color = Color.White.copy(alpha = 0.2f), modifier = Modifier.height(30.dp))
+                DashboardStat("Received", "₹$totalPaid", Color.White)
             }
         }
     }

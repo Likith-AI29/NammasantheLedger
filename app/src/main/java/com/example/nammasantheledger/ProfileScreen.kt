@@ -33,6 +33,7 @@ fun ProfileScreen(
     var shopStatusInput by remember { mutableStateOf(shopStatus) }
 
     Scaffold(
+        modifier = Modifier.background(Color.White),
         topBar = {
             TopAppBar(
                 title = { Text("Profile", fontWeight = FontWeight.Bold) },

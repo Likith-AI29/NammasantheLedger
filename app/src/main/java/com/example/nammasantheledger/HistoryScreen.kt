@@ -41,6 +41,7 @@ fun HistoryScreen(viewModel: LedgerViewModel, onBack: () -> Unit) {
     val totalCustomers = displayList.size
 
     Scaffold(
+        modifier = Modifier.background(Color.White),
         topBar = {
             Column {
                 TopAppBar(
@@ -87,7 +88,7 @@ fun HistoryScreen(viewModel: LedgerViewModel, onBack: () -> Unit) {
                         .fillMaxWidth()
                         .padding(12.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8EAF6))
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
